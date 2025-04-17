@@ -40,6 +40,9 @@ fn impbind(args: Arguments) -> Result<(), Box<dyn Error>> {
     // create the PE object from file.
     let pe = Pe::from(args.file)?;
 
+    // ensure that the pe file is valid.
+    pe.verify()?;
+
     println!("{:X?}", pe.get_dos_header());
 
     Ok(())
