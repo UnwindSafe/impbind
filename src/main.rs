@@ -1,18 +1,18 @@
-mod pe;
-mod types;
+pub mod bind;
+pub mod pe;
+pub mod types;
 
 use clap::{Args, Parser, ValueEnum};
-use pe::Pe;
 use std::{error::Error, path::PathBuf, process};
-use tracing::{Level, error, trace};
+use tracing::{Level, error, info, trace};
 use tracing_subscriber::FmtSubscriber;
 
 /// impbind - PE import spoofer tool.
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
-struct Arguments {
+pub struct Arguments {
     #[arg(index = 1)]
-    file: PathBuf,
+    pub file: PathBuf,
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
@@ -28,22 +28,12 @@ fn main() -> Result<(), Box<dyn Error>> {
     // parse the command line arguments.
     let args = Arguments::parse();
 
-    if let Err(e) = impbind(args) {
+    info!("selected {:?}", args.file.clone());
+
+    if let Err(e) = bind::bind(args) {
         error!("{e}");
         process::exit(-1);
     }
-
-    Ok(())
-}
-
-fn impbind(args: Arguments) -> Result<(), Box<dyn Error>> {
-    // create the PE object from file.
-    let pe = Pe::from(args.file)?;
-
-    // ensure that the pe file is valid.
-    pe.verify()?;
-
-    println!("{:X?}", pe.get_dos_header());
 
     Ok(())
 }

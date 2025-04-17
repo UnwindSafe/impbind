@@ -86,3 +86,49 @@ pub struct IMAGE_DATA_DIRECTORY {
     pub VirtualAddress: u32,
     pub Size: u32,
 }
+
+pub mod IMAGE_DIRECTORY_ENTRY {
+    pub const EXPORT: usize = 0;
+    pub const IMPORT: usize = 1;
+    pub const RESOURCE: usize = 2;
+    pub const EXCEPTION: usize = 3;
+    pub const SECURITY: usize = 4;
+    pub const BASERELOC: usize = 5;
+    pub const DEBUG: usize = 6;
+    pub const ARCHITECTURE: usize = 7;
+    pub const GLOBALPTR: usize = 8;
+    pub const TLS: usize = 9;
+    pub const LOAD_CONFIG: usize = 10;
+    pub const BOUND_IMPORT: usize = 11;
+    pub const IAT: usize = 12;
+    pub const DELAY_IMPORT: usize = 13;
+    pub const COM_DESCRIPTOR: usize = 14;
+}
+
+pub const IMAGE_NUMBER_OF_DIRECTORY_ENTRIES: usize = 16;
+
+#[repr(C)]
+pub struct IMAGE_SECTION_HEADER {
+    pub Name: [u8; 8],
+    pub Misc: IMAGE_SECTION_HEADER_0,
+    pub VirtualAddress: u32,
+    pub SizeOfRawData: u32,
+    pub PointerToRawData: u32,
+    pub PointerToRelocations: u32,
+    pub PointerToLinenumbers: u32,
+    pub NumberOfRelocations: u16,
+    pub NumberOfLinenumbers: u16,
+    pub Characteristics: u32,
+}
+
+impl IMAGE_SECTION_HEADER {
+    pub fn get_name(&self) -> String {
+        String::from_utf8_lossy(&self.Name).to_string()
+    }
+}
+
+#[repr(C)]
+pub union IMAGE_SECTION_HEADER_0 {
+    pub PhysicalAddress: u32,
+    pub VirtualSize: u32,
+}
