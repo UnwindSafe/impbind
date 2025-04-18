@@ -1,10 +1,8 @@
-use std::path::PathBuf;
+use std::{isize, path::PathBuf};
 
 use thiserror::Error;
-use tracing::trace;
 
 use crate::types::{IMAGE_DOS_HEADER, IMAGE_NT_HEADERS64, IMAGE_SECTION_HEADER};
-use std::ptr::addr_of;
 
 #[derive(Error, Debug)]
 pub enum PeError {
@@ -12,6 +10,8 @@ pub enum PeError {
     IOError(#[from] std::io::Error),
     #[error("Invalid PE file.")]
     Invalid,
+    #[error("RVA is not inside of a section.")]
+    NotInSection,
 }
 
 type Result<T> = std::result::Result<T, PeError>;
@@ -86,5 +86,47 @@ impl Pe {
         }
 
         Ok(section_header)
+    }
+
+    /// Return a poninter, that points to an address inside of a section specified by the RVA.
+    pub fn get_pointer_from_section(&self, rva: u32) -> Result<*const u8> {
+        for section in self.get_section_headers()? {
+            let start_address = section.VirtualAddress;
+            let end_address = section.VirtualAddress + section.SizeOfRawData;
+
+            // if the rva is in the range of the section.
+            if rva >= start_address && rva < end_address {
+                // get offset of the target from the section.
+                let delta = rva as usize - section.VirtualAddress as usize;
+
+                unsafe {
+                    return Ok(self
+                        .bytes
+                        .as_ptr()
+                        .add(section.PointerToRawData as usize + delta));
+                }
+            }
+        }
+
+        Err(PeError::NotInSection)
+    }
+
+    /// Given an RVA, return a string from its location.
+    pub fn get_string_at_rva(&self, rva: u32) -> Result<String> {
+        // get a pointer to the string.
+        let string_pointer = self.get_pointer_from_section(rva)?;
+
+        let length = unsafe {
+            // find the null byte from the start of the pointer.
+            std::slice::from_raw_parts(string_pointer, isize::MAX as usize)
+                .iter()
+                .position(|&byte| byte == 0)
+                .unwrap_or(0)
+        };
+
+        // NOTE: for some reason using string from raw parts crashes it.
+        let slice = unsafe { std::slice::from_raw_parts(string_pointer, length) };
+
+        Ok(String::from_utf8_lossy(slice).to_string())
     }
 }

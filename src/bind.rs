@@ -1,10 +1,9 @@
 use thiserror::Error;
-use tracing::{Level, error, info, trace};
 
 use crate::{
     Arguments,
     pe::{Pe, PeError},
-    types::IMAGE_DIRECTORY_ENTRY,
+    types::{IMAGE_DIRECTORY_ENTRY, IMAGE_IMPORT_DESCRIPTOR},
 };
 
 #[derive(Error, Debug)]
@@ -19,8 +18,6 @@ pub fn bind(args: Arguments) -> Result<(), BindError> {
     // create the PE object from file.
     let pe = Pe::from(args.file)?;
 
-    info!("verifying file is an executable ...");
-
     // ensure that the pe file is valid.
     pe.verify()?;
 
@@ -32,7 +29,14 @@ pub fn bind(args: Arguments) -> Result<(), BindError> {
         return Err(BindError::NoImportDirectory);
     }
 
-    pe.get_section_headers().unwrap();
+    // get a pointer to the image import descriptor.
+    let pointer = pe.get_pointer_from_section(import_directory.VirtualAddress)?
+        as *const IMAGE_IMPORT_DESCRIPTOR;
+
+    let name = unsafe { (*pointer).Name };
+
+    unsafe { println!("{:X?}", (*pointer).Name) }
+    println!("{:?}", pe.get_string_at_rva(name));
 
     Ok(())
 }
