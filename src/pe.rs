@@ -5,7 +5,7 @@ use thiserror::Error;
 
 use crate::types::{
     IMAGE_DIRECTORY_ENTRY, IMAGE_DOS_HEADER, IMAGE_IMPORT_DESCRIPTOR, IMAGE_NT_HEADERS64,
-    IMAGE_SECTION_HEADER,
+    IMAGE_SECTION_HEADER, IMAGE_THUNK_DATA64,
 };
 
 #[derive(Error, Debug)]
@@ -148,6 +148,38 @@ impl Pe {
         }
 
         Ok(import_descriptors)
+    }
+
+    /// Given a descriptor, return a vector of all of its ILT 'Thunks'.
+    pub fn get_ilt_thunks(
+        &self,
+        descriptor: &IMAGE_IMPORT_DESCRIPTOR,
+    ) -> Result<Vec<IMAGE_THUNK_DATA64>> {
+        let mut thunk_ptr = unsafe {
+            self.get_pointer_from_section(descriptor.Anonymous.OriginalFirstThunk)?
+                as *const IMAGE_THUNK_DATA64
+        };
+
+        let mut thunks: Vec<_> = Vec::new();
+
+        loop {
+            // deref thunk so we can read its data.
+            let thunk = unsafe { thunk_ptr.read_unaligned() };
+
+            // ensure that the current thunk is valid.
+            if unsafe { thunk.u1.AddressOfData } == 0 {
+                break;
+            }
+
+            thunks.push(thunk);
+
+            unsafe {
+                // advance the pointer to the next thunk.
+                thunk_ptr = thunk_ptr.add(1);
+            }
+        }
+
+        Ok(thunks)
     }
 
     /// Given an RVA, return a string from its location.

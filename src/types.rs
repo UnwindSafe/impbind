@@ -147,3 +147,16 @@ pub union IMAGE_IMPORT_DESCRIPTOR_0 {
     pub Characteristics: u32,
     pub OriginalFirstThunk: u32,
 }
+
+#[repr(C)]
+pub struct IMAGE_THUNK_DATA64 {
+    pub u1: IMAGE_THUNK_DATA64_0,
+}
+
+#[repr(C)]
+pub union IMAGE_THUNK_DATA64_0 {
+    pub ForwarderString: u64,
+    pub Function: u64,
+    pub Ordinal: u64,
+    pub AddressOfData: u64,
+}

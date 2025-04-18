@@ -23,6 +23,7 @@ pub fn bind(args: Arguments) -> Result<(), BindError> {
 
     for x in pe.get_import_descriptors()? {
         println!("{}", pe.get_string_at_rva(x.Name)?);
+        println!("functions: {}", pe.get_ilt_thunks(&x)?.len());
     }
 
     Ok(())
