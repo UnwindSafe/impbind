@@ -160,3 +160,9 @@ pub union IMAGE_THUNK_DATA64_0 {
     pub Ordinal: u64,
     pub AddressOfData: u64,
 }
+
+#[repr(C)]
+pub struct IMAGE_IMPORT_BY_NAME {
+    pub Hint: u16,
+    pub Name: [i8; 1],
+}

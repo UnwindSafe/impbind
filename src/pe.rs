@@ -4,8 +4,8 @@ use std::{isize, path::PathBuf};
 use thiserror::Error;
 
 use crate::types::{
-    IMAGE_DIRECTORY_ENTRY, IMAGE_DOS_HEADER, IMAGE_IMPORT_DESCRIPTOR, IMAGE_NT_HEADERS64,
-    IMAGE_SECTION_HEADER, IMAGE_THUNK_DATA64,
+    IMAGE_DIRECTORY_ENTRY, IMAGE_DOS_HEADER, IMAGE_IMPORT_BY_NAME, IMAGE_IMPORT_DESCRIPTOR,
+    IMAGE_NT_HEADERS64, IMAGE_SECTION_HEADER, IMAGE_THUNK_DATA64,
 };
 
 #[derive(Error, Debug)]
@@ -180,6 +180,25 @@ impl Pe {
         }
 
         Ok(thunks)
+    }
+
+    pub fn get_thunk_function_name(&self, thunk: &IMAGE_THUNK_DATA64) -> Result<String> {
+        // this will actually fail if it's an ordinal, pretty cool.
+        let pointer = self.get_pointer_from_section(unsafe { thunk.u1.AddressOfData as _ })?
+            as *const IMAGE_IMPORT_BY_NAME;
+
+        // a pointer to the name part of the struct.
+        // this struct uses the 1 element array C idiom thing.
+        let name_ptr = unsafe { &(*pointer).Name as *const i8 };
+
+        // get the length of the string.
+        let length = (0..)
+            .take_while(|&i| unsafe { *name_ptr.add(i) } != 0)
+            .count();
+
+        let name_slice = unsafe { std::slice::from_raw_parts(name_ptr as *const u8, length) };
+
+        Ok(String::from_utf8_lossy(name_slice).to_string())
     }
 
     /// Given an RVA, return a string from its location.
