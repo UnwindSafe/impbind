@@ -11,6 +11,10 @@ use std::{error::Error, path::PathBuf, process};
 pub struct Arguments {
     #[arg(index = 1)]
     pub file: PathBuf,
+
+    /// Show the current imports for target file.
+    #[arg(short, long)]
+    list_imports: bool,
 }
 
 fn main() -> Result<(), Box<dyn Error>> {

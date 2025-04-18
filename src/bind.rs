@@ -1,17 +1,41 @@
+use comfy_table::{Table, modifiers::UTF8_ROUND_CORNERS, presets::UTF8_FULL};
 use thiserror::Error;
 
 use crate::{
     Arguments,
     pe::{Pe, PeError},
-    types::{IMAGE_DIRECTORY_ENTRY, IMAGE_IMPORT_DESCRIPTOR},
 };
 
 #[derive(Error, Debug)]
 pub enum BindError {
-    #[error("PE doesn't have import directory.")]
-    NoImportDirectory,
     #[error(transparent)]
     PeError(#[from] PeError),
+}
+
+fn list_imports(pe: &Pe) -> Result<(), BindError> {
+    let mut table = Table::new();
+
+    // configure the table style.
+    table
+        .load_preset(UTF8_FULL)
+        .apply_modifier(UTF8_ROUND_CORNERS)
+        .set_header(vec!["DLL", "Function(s)"]);
+
+    for desc in pe.get_import_descriptors()? {
+        let functions = pe
+            .get_ilt_thunks(&desc)?
+            .iter()
+            .map(|t| pe.get_thunk_function_name(t).unwrap_or_default())
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        // add the dll name and its functions to a row.
+        table.add_row(vec![pe.get_string_at_rva(desc.Name)?, functions]);
+    }
+
+    println!("{table}");
+
+    Ok(())
 }
 
 pub fn bind(args: Arguments) -> Result<(), BindError> {
@@ -21,11 +45,9 @@ pub fn bind(args: Arguments) -> Result<(), BindError> {
     // ensure that the pe file is valid.
     pe.verify()?;
 
-    for x in pe.get_import_descriptors()? {
-        println!("{}", pe.get_string_at_rva(x.Name)?);
-        for thunk in pe.get_ilt_thunks(&x)? {
-            println!("function: {}", pe.get_thunk_function_name(&thunk)?)
-        }
+    // specified through the command line.
+    if args.list_imports {
+        return list_imports(&pe);
     }
 
     Ok(())
