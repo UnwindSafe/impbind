@@ -1,8 +1,12 @@
+use core::panic;
 use std::{isize, path::PathBuf};
 
 use thiserror::Error;
 
-use crate::types::{IMAGE_DOS_HEADER, IMAGE_NT_HEADERS64, IMAGE_SECTION_HEADER};
+use crate::types::{
+    IMAGE_DIRECTORY_ENTRY, IMAGE_DOS_HEADER, IMAGE_IMPORT_DESCRIPTOR, IMAGE_NT_HEADERS64,
+    IMAGE_SECTION_HEADER,
+};
 
 #[derive(Error, Debug)]
 pub enum PeError {
@@ -109,6 +113,41 @@ impl Pe {
         }
 
         Err(PeError::NotInSection)
+    }
+
+    pub fn get_import_descriptors(&self) -> Result<Vec<IMAGE_IMPORT_DESCRIPTOR>> {
+        // get the import data directory.
+        let import_directory =
+            self.get_nt_headers().OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY::IMPORT];
+
+        if import_directory.VirtualAddress == 0 {
+            todo!("make it so that we create our own directory.");
+        }
+
+        // get a pointer to the image import descriptor.
+        let mut pointer = self.get_pointer_from_section(import_directory.VirtualAddress)?
+            as *const IMAGE_IMPORT_DESCRIPTOR;
+
+        let mut import_descriptors: Vec<_> = Vec::new();
+
+        loop {
+            // deref the current descriptor.
+            let descriptor = unsafe { pointer.read_unaligned() };
+
+            // if there is no name specified the descriptor is probably empty.
+            if descriptor.Name == 0 {
+                break;
+            }
+
+            import_descriptors.push(descriptor);
+
+            unsafe {
+                // advance the pointer to the next descriptor.
+                pointer = pointer.add(1);
+            }
+        }
+
+        Ok(import_descriptors)
     }
 
     /// Given an RVA, return a string from its location.

@@ -21,22 +21,9 @@ pub fn bind(args: Arguments) -> Result<(), BindError> {
     // ensure that the pe file is valid.
     pe.verify()?;
 
-    // get the import data directory.
-    let import_directory =
-        pe.get_nt_headers().OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY::IMPORT];
-
-    if import_directory.VirtualAddress == 0 {
-        return Err(BindError::NoImportDirectory);
+    for x in pe.get_import_descriptors()? {
+        println!("{}", pe.get_string_at_rva(x.Name)?);
     }
-
-    // get a pointer to the image import descriptor.
-    let pointer = pe.get_pointer_from_section(import_directory.VirtualAddress)?
-        as *const IMAGE_IMPORT_DESCRIPTOR;
-
-    let name = unsafe { (*pointer).Name };
-
-    unsafe { println!("{:X?}", (*pointer).Name) }
-    println!("{:?}", pe.get_string_at_rva(name));
 
     Ok(())
 }
