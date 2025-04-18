@@ -108,6 +108,7 @@ pub mod IMAGE_DIRECTORY_ENTRY {
 pub const IMAGE_NUMBER_OF_DIRECTORY_ENTRIES: usize = 16;
 
 #[repr(C)]
+#[derive(Clone, Copy, Default, Debug)]
 pub struct IMAGE_SECTION_HEADER {
     pub Name: [u8; 8],
     pub Misc: IMAGE_SECTION_HEADER_0,
@@ -125,12 +126,44 @@ impl IMAGE_SECTION_HEADER {
     pub fn get_name(&self) -> String {
         String::from_utf8_lossy(&self.Name).to_string()
     }
+
+    pub fn set_name(&mut self, name: &str) {
+        // set each byte of the name field to the specified string, at max 8.
+        for (i, byte) in name.as_bytes().iter().enumerate().take(8) {
+            self.Name[i] = *byte;
+        }
+    }
+}
+
+impl std::fmt::Debug for IMAGE_SECTION_HEADER_0 {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut debug_struct = f.debug_struct("IMAGE_SECTION_HEADER_0");
+
+        // Safety: Reading union fields requires unsafe
+        unsafe {
+            debug_struct
+                .field(
+                    "PhysicalAddress",
+                    &format_args!("{:#x}", self.PhysicalAddress),
+                )
+                .field("VirtualSize", &format_args!("{:#x}", self.VirtualSize));
+        }
+
+        debug_struct.finish()
+    }
 }
 
 #[repr(C)]
+#[derive(Clone, Copy)]
 pub union IMAGE_SECTION_HEADER_0 {
     pub PhysicalAddress: u32,
     pub VirtualSize: u32,
+}
+
+impl Default for IMAGE_SECTION_HEADER_0 {
+    fn default() -> Self {
+        IMAGE_SECTION_HEADER_0 { PhysicalAddress: 0 }
+    }
 }
 
 #[repr(C)]

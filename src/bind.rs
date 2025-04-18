@@ -40,7 +40,7 @@ fn list_imports(pe: &Pe) -> Result<(), BindError> {
 
 pub fn bind(args: Arguments) -> Result<(), BindError> {
     // create the PE object from file.
-    let pe = Pe::from(args.file)?;
+    let mut pe = Pe::from(args.file.clone())?;
 
     // ensure that the pe file is valid.
     pe.verify()?;
@@ -49,6 +49,13 @@ pub fn bind(args: Arguments) -> Result<(), BindError> {
     if args.list_imports {
         return list_imports(&pe);
     }
+
+    pe.add_new_import_section(Some(".imp"), 0x1000)?;
+
+    pe.export(&format!(
+        "{}.imp.exe",
+        args.file.file_stem().unwrap().to_string_lossy()
+    ))?;
 
     Ok(())
 }

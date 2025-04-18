@@ -1,11 +1,11 @@
-use core::panic;
+use std::io::prelude::*;
 use std::{isize, path::PathBuf};
 
 use thiserror::Error;
 
 use crate::types::{
-    IMAGE_DIRECTORY_ENTRY, IMAGE_DOS_HEADER, IMAGE_IMPORT_BY_NAME, IMAGE_IMPORT_DESCRIPTOR,
-    IMAGE_NT_HEADERS64, IMAGE_SECTION_HEADER, IMAGE_THUNK_DATA64,
+    IMAGE_DIRECTORY_ENTRY, IMAGE_DOS_HEADER, IMAGE_FILE_HEADER, IMAGE_IMPORT_BY_NAME,
+    IMAGE_IMPORT_DESCRIPTOR, IMAGE_NT_HEADERS64, IMAGE_SECTION_HEADER, IMAGE_THUNK_DATA64,
 };
 
 #[derive(Error, Debug)]
@@ -16,6 +16,25 @@ pub enum PeError {
     Invalid,
     #[error("RVA is not inside of a section.")]
     NotInSection,
+    #[error("Section doesn't exist.")]
+    NoSection,
+}
+
+trait Align {
+    /// Aligns a value to a specified boundary.
+    ///
+    /// This function rounds up a value to the next multiple of the specified alignment.
+    fn align(&self, alignment: u32) -> u32;
+}
+
+impl Align for u32 {
+    fn align(&self, alignment: u32) -> u32 {
+        if self % alignment == 0 {
+            return *self;
+        }
+
+        (self / alignment + 1) * alignment
+    }
 }
 
 type Result<T> = std::result::Result<T, PeError>;
@@ -115,6 +134,7 @@ impl Pe {
         Err(PeError::NotInSection)
     }
 
+    /// This will parse the import directory for import descriptors, and return them.
     pub fn get_import_descriptors(&self) -> Result<Vec<IMAGE_IMPORT_DESCRIPTOR>> {
         // get the import data directory.
         let import_directory =
@@ -218,5 +238,70 @@ impl Pe {
         let slice = unsafe { std::slice::from_raw_parts(string_pointer, length) };
 
         Ok(String::from_utf8_lossy(slice).to_string())
+    }
+
+    pub fn add_new_import_section(&mut self, name: Option<&str>, size: u32) -> Result<()> {
+        // create a new section header that we'll append to the table.
+        let mut section = IMAGE_SECTION_HEADER::default();
+
+        // set the section name if specified.
+        if let Some(name) = name {
+            section.set_name(name);
+        }
+
+        let file_alignment = self.get_nt_headers().OptionalHeader.FileAlignment;
+        let section_alignment = self.get_nt_headers().OptionalHeader.SectionAlignment;
+
+        // get the last section in the section headers.
+        let last_section = self
+            .get_section_headers()?
+            .into_iter()
+            .last()
+            .ok_or(PeError::NoSection)?;
+
+        // For executable images, this must be a multiple of FileAlignment from the optional header. - MSDN.
+        section.PointerToRawData =
+            (last_section.PointerToRawData + last_section.SizeOfRawData).align(file_alignment);
+
+        // in the docs, it doesn't say that this needs to be aligned.
+        section.VirtualAddress =
+            last_section.VirtualAddress + unsafe { last_section.Misc.VirtualSize };
+
+        // section.VirtualAddress = (last_section.VirtualAddress
+        //     + unsafe { last_section.Misc.VirtualSize })
+        // .align(section_alignment);
+
+        // make sure the size is properly aligned.
+        section.SizeOfRawData = size.align(file_alignment);
+
+        // make sure the size is properly aligned.
+        section.Misc.VirtualSize = size.align(section_alignment);
+
+        // IMAGE_SCN_CNT_INITIALIZED_DATA (0x00000040)
+        // IMAGE_SCN_MEM_READ             (0x40000000)
+        section.Characteristics = 0x40000040;
+
+        // get a mutable pointer to the file header.
+        let optional_header_ptr: *mut IMAGE_FILE_HEADER =
+            unsafe { std::ptr::addr_of!((*self.get_nt_headers_ptr()).FileHeader) as *mut _ };
+
+        // increase the number of sections.
+        unsafe { (*optional_header_ptr).NumberOfSections += 1 }
+
+        self.bytes
+            .resize(self.bytes.len() + section.SizeOfRawData as usize, 0);
+
+        Ok(())
+    }
+
+    /// Exports the `bytes` buffer containing the *potentially* modified PE file.
+    pub fn export(&self, name: &str) -> Result<()> {
+        // create the new file.
+        let mut file = std::fs::File::create(name)?;
+
+        // write our modified pe file to disk.
+        file.write_all(&self.bytes)?;
+
+        Ok(())
     }
 }
