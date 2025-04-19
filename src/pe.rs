@@ -83,32 +83,22 @@ impl Pe {
         Ok(())
     }
 
-    pub fn get_section_headers(&self) -> Result<Vec<IMAGE_SECTION_HEADER>> {
-        // get the address of the optional header.
-        let oh_ptr =
+    pub fn get_section_headers(&self) -> Result<&mut [IMAGE_SECTION_HEADER]> {
+        //  get the address of the optional header which is right before the section header.
+        let optional_header_ =
             unsafe { std::ptr::addr_of!((*self.get_nt_headers_ptr()).OptionalHeader) } as *const u8;
 
-        // get the nt headers so we can get header count and location.
-        let nt = self.get_nt_headers();
+        // get the size of the optional header so we can add it to optional header addr.
+        let optional_header_sz = self.get_nt_headers().FileHeader.SizeOfOptionalHeader as usize;
 
-        // get the number of sections in the exe.
-        let section_counter = nt.FileHeader.NumberOfSections;
-
-        // get the size of the optional header.
-        let optional_header_sz = nt.FileHeader.SizeOfOptionalHeader as usize;
-
+        // get a pointer to the section header.
         let section_header_ptr =
-            unsafe { oh_ptr.add(optional_header_sz) as *const IMAGE_SECTION_HEADER };
+            unsafe { optional_header_.add(optional_header_sz) as *mut IMAGE_SECTION_HEADER };
 
-        // here we will put our collected section headers.
-        let mut section_header: Vec<IMAGE_SECTION_HEADER> = Vec::new();
+        // get the number of sections.
+        let section_count = self.get_nt_headers().FileHeader.NumberOfSections;
 
-        for i in 0..section_counter as usize {
-            // manually dereference (actually a copy) each header in the array.
-            section_header.push(unsafe { section_header_ptr.add(i).read_unaligned() });
-        }
-
-        Ok(section_header)
+        Ok(unsafe { std::slice::from_raw_parts_mut(section_header_ptr, section_count as usize) })
     }
 
     /// Return a poninter, that points to an address inside of a section specified by the RVA.
@@ -282,11 +272,11 @@ impl Pe {
         section.Characteristics = 0x40000040;
 
         // get a mutable pointer to the file header.
-        let optional_header_ptr: *mut IMAGE_FILE_HEADER =
+        let file_header_ptr: *mut IMAGE_FILE_HEADER =
             unsafe { std::ptr::addr_of!((*self.get_nt_headers_ptr()).FileHeader) as *mut _ };
 
         // increase the number of sections.
-        unsafe { (*optional_header_ptr).NumberOfSections += 1 }
+        unsafe { (*file_header_ptr).NumberOfSections += 1 }
 
         self.bytes
             .resize(self.bytes.len() + section.SizeOfRawData as usize, 0);
