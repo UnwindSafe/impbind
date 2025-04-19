@@ -83,6 +83,7 @@ impl Pe {
         Ok(())
     }
 
+    // NOTE: this absolutely should marked as `&mut self`.
     pub fn get_section_headers(&self) -> Result<&mut [IMAGE_SECTION_HEADER]> {
         //  get the address of the optional header which is right before the section header.
         let optional_header_ =
@@ -270,6 +271,11 @@ impl Pe {
         // IMAGE_SCN_CNT_INITIALIZED_DATA (0x00000040)
         // IMAGE_SCN_MEM_READ             (0x40000000)
         section.Characteristics = 0x40000040;
+
+        // pointer to new section header.
+        let new_section_ptr = unsafe { (last_section as *mut IMAGE_SECTION_HEADER).add(1) };
+
+        unsafe { *new_section_ptr = section }
 
         // get a mutable pointer to the file header.
         let file_header_ptr: *mut IMAGE_FILE_HEADER =
