@@ -344,6 +344,28 @@ impl Pe {
         Ok(section)
     }
 
+    /// Copy old import directory to new area.
+    pub fn copy_imports_to_rva(&self, rva: u32) -> Result<()> {
+        let import_directory =
+            self.get_nt_headers().OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY::IMPORT];
+
+        // get the pointer to the target import descriptors.
+        let import_descriptors = self.get_pointer_from_section(import_directory.VirtualAddress)?
+            as *mut IMAGE_IMPORT_DESCRIPTOR;
+
+        let new_ptr = self.get_pointer_from_section(rva)? as *mut IMAGE_IMPORT_DESCRIPTOR;
+
+        unsafe {
+            std::ptr::copy_nonoverlapping(
+                import_descriptors,
+                new_ptr,
+                import_directory.Size as usize / std::mem::size_of::<IMAGE_IMPORT_DESCRIPTOR>() - 1,
+            );
+        }
+
+        Ok(())
+    }
+
     /// Exports the `bytes` buffer containing the *potentially* modified PE file.
     pub fn export(&self, name: &str) -> Result<()> {
         // create the new file.

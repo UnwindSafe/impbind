@@ -52,7 +52,9 @@ pub fn bind(args: Arguments) -> Result<(), BindError> {
 
     let section = pe.add_new_import_section(Some(".idata"), 0x1000)?;
 
-    // pe.set_import_directory_rva(section.VirtualAddress);
+    pe.copy_imports_to_rva(section.VirtualAddress)?;
+
+    pe.set_import_directory_rva(section.VirtualAddress);
 
     pe.export(&format!(
         "{}.imp.exe",
