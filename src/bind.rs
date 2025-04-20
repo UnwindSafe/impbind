@@ -50,7 +50,7 @@ pub fn bind(args: Arguments) -> Result<(), BindError> {
         return list_imports(&pe);
     }
 
-    pe.add_new_import_section(Some(".imp"), 0x1000)?;
+    pe.add_new_import_section(Some(".idata"), 0x1000)?;
 
     pe.export(&format!(
         "{}.imp.exe",

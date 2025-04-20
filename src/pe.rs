@@ -5,7 +5,8 @@ use thiserror::Error;
 
 use crate::types::{
     IMAGE_DIRECTORY_ENTRY, IMAGE_DOS_HEADER, IMAGE_FILE_HEADER, IMAGE_IMPORT_BY_NAME,
-    IMAGE_IMPORT_DESCRIPTOR, IMAGE_NT_HEADERS64, IMAGE_SECTION_HEADER, IMAGE_THUNK_DATA64,
+    IMAGE_IMPORT_DESCRIPTOR, IMAGE_NT_HEADERS64, IMAGE_OPTIONAL_HEADER64, IMAGE_SECTION_HEADER,
+    IMAGE_THUNK_DATA64,
 };
 
 #[derive(Error, Debug)]
@@ -86,7 +87,7 @@ impl Pe {
     // NOTE: this absolutely should marked as `&mut self`.
     pub fn get_section_headers(&self) -> Result<&mut [IMAGE_SECTION_HEADER]> {
         //  get the address of the optional header which is right before the section header.
-        let optional_header_ =
+        let optional_header_ptr =
             unsafe { std::ptr::addr_of!((*self.get_nt_headers_ptr()).OptionalHeader) } as *const u8;
 
         // get the size of the optional header so we can add it to optional header addr.
@@ -94,7 +95,7 @@ impl Pe {
 
         // get a pointer to the section header.
         let section_header_ptr =
-            unsafe { optional_header_.add(optional_header_sz) as *mut IMAGE_SECTION_HEADER };
+            unsafe { optional_header_ptr.add(optional_header_sz) as *mut IMAGE_SECTION_HEADER };
 
         // get the number of sections.
         let section_count = self.get_nt_headers().FileHeader.NumberOfSections;
@@ -123,6 +124,17 @@ impl Pe {
         }
 
         Err(PeError::NotInSection)
+    }
+
+    pub fn set_import_directory_rva(&mut self, rva: u32) {
+        let optional_header_ptr =
+            unsafe { std::ptr::addr_of!((*self.get_nt_headers_ptr()).OptionalHeader) }
+                as *mut IMAGE_OPTIONAL_HEADER64;
+
+        unsafe {
+            (*optional_header_ptr).DataDirectory[IMAGE_DIRECTORY_ENTRY::IMPORT].VirtualAddress =
+                rva;
+        }
     }
 
     /// This will parse the import directory for import descriptors, and return them.
