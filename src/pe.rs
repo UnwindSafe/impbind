@@ -4,9 +4,9 @@ use std::{isize, path::PathBuf};
 use thiserror::Error;
 
 use crate::types::{
-    IMAGE_DIRECTORY_ENTRY, IMAGE_DOS_HEADER, IMAGE_FILE_HEADER, IMAGE_IMPORT_BY_NAME,
+    DLL_NAME, IMAGE_DIRECTORY_ENTRY, IMAGE_DOS_HEADER, IMAGE_FILE_HEADER, IMAGE_IMPORT_BY_NAME,
     IMAGE_IMPORT_DESCRIPTOR, IMAGE_NT_HEADERS64, IMAGE_OPTIONAL_HEADER64, IMAGE_SECTION_HEADER,
-    IMAGE_THUNK_DATA64, Import,
+    IMAGE_THUNK_DATA64, Import, THUNK_EX,
 };
 
 #[derive(Error, Debug)]
@@ -19,6 +19,8 @@ pub enum PeError {
     NotInSection,
     #[error("Section doesn't exist.")]
     NoSection,
+    #[error("Descriptor doesn't exist.")]
+    NoDescriptor,
 }
 
 trait Align {
@@ -135,6 +137,15 @@ impl Pe {
             (*optional_header_ptr).DataDirectory[IMAGE_DIRECTORY_ENTRY::IMPORT].VirtualAddress =
                 rva;
         }
+    }
+
+    /// Instead of getting the length from the slice, this uses the size member.
+    fn get_import_directory_size_manual(&self) -> usize {
+        // get the import data directory.
+        let import_directory =
+            self.get_nt_headers().OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY::IMPORT];
+
+        import_directory.Size as usize / std::mem::size_of::<IMAGE_IMPORT_DESCRIPTOR>() - 1
     }
 
     /// This will parse the import directory for import descriptors, and return them.
@@ -353,8 +364,92 @@ impl Pe {
     }
 
     /// This will append imports to the import descriptors.
-    pub fn add_new_imports(&mut self, imports: Vec<Import>) -> Result<()> {
-        unimplemented!()
+    ///
+    /// This will only work one time per import directory.
+    /// This also assumes the start of the section is where directory is.
+    pub fn add_new_imports(
+        &mut self,
+        section_name: Option<&str>,
+        imports: Vec<Import>,
+    ) -> Result<()> {
+        // either get the section from name, or get the last section.
+        let section = if let Some(name) = section_name {
+            self.get_section_headers()?
+                .iter()
+                .find(|s| s.get_name() == name)
+                .ok_or(PeError::NoSection)?
+        } else {
+            self.get_section_headers()?
+                .last()
+                .ok_or(PeError::NoSection)?
+        };
+
+        let mut descriptors = Vec::new();
+        let mut descriptor_names = Vec::new();
+
+        for import in imports.iter() {
+            // add new descriptor that we will fill out later.
+            let descriptor = IMAGE_IMPORT_DESCRIPTOR::default();
+            descriptors.push(descriptor);
+
+            // cooresponding name for the descriptor.
+            let mut descriptor_name = DLL_NAME::default();
+            descriptor_name.set_dll_name(&import.file);
+            descriptor_names.push(descriptor_name);
+        }
+
+        let mut pointer_to_descriptors_natural_end =
+            self.get_import_descriptors()?
+                .into_iter()
+                .last()
+                .ok_or(PeError::NoDescriptor)? as *mut IMAGE_IMPORT_DESCRIPTOR;
+
+        // pointer_to_descriptors_natural_end = unsafe { pointer_to_descriptors_natural_end.add(1) };
+
+        for (_, d) in descriptors.iter().enumerate() {
+            pointer_to_descriptors_natural_end =
+                unsafe { pointer_to_descriptors_natural_end.add(1) };
+
+            unsafe { *pointer_to_descriptors_natural_end = *d }
+        }
+
+        let mut pointer_to_dll_names =
+            unsafe { pointer_to_descriptors_natural_end.add(1) as *mut DLL_NAME };
+
+        for name in descriptor_names.iter() {
+            unsafe { *pointer_to_dll_names = *name }
+
+            pointer_to_dll_names = unsafe { pointer_to_dll_names.add(1) };
+        }
+
+        let mut descriptor_ptr: *mut IMAGE_IMPORT_DESCRIPTOR = std::ptr::null_mut();
+
+        for descriptor in self.get_import_descriptors()?.into_iter() {
+            // if this is the case it must be our descriptor.
+            if descriptor.Name == 0 {
+                descriptor_ptr = descriptor as *mut IMAGE_IMPORT_DESCRIPTOR;
+                break;
+            }
+        }
+
+        let mut name_rva = section.VirtualAddress
+            + ((self.get_import_directory_size_manual() as u32 + descriptors.len() as u32)
+                * std::mem::size_of::<IMAGE_IMPORT_DESCRIPTOR>() as u32);
+
+        for i in 0..descriptors.len() {
+            unsafe {
+                (*descriptor_ptr).Name = name_rva;
+            }
+            descriptor_ptr = unsafe { descriptor_ptr.add(1) };
+            name_rva += std::mem::size_of::<DLL_NAME>() as u32;
+        }
+
+        // this is what the RVA is after going through the descriptors.
+        // let current_rva = section.VirtualAddress as usize
+        //     + std::mem::size_of::<IMAGE_IMPORT_DESCRIPTOR>() * descriptors.len()
+        //     + std::mem::size_of::<IMAGE_IMPORT_DESCRIPTOR>() * self.get_import_descriptors()?.len();
+
+        Ok(())
     }
 
     /// Exports the `bytes` buffer containing the *potentially* modified PE file.

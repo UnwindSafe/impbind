@@ -4,6 +4,7 @@ use thiserror::Error;
 use crate::{
     Arguments,
     pe::{Pe, PeError},
+    types::Import,
 };
 
 #[derive(Error, Debug)]
@@ -55,6 +56,13 @@ pub fn bind(args: Arguments) -> Result<(), BindError> {
     pe.copy_imports_to_rva(section.VirtualAddress)?;
 
     pe.set_import_directory_rva(section.VirtualAddress);
+
+    let import = Import::new(
+        "house.dll".to_string(),
+        vec!["Window".to_string(), "Door".to_string(), "Roof".to_string()],
+    );
+
+    pe.add_new_imports(None, vec![import])?;
 
     pe.export(&format!(
         "{}.imp.exe",

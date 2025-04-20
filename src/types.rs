@@ -150,7 +150,6 @@ impl std::fmt::Debug for IMAGE_SECTION_HEADER_0 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut debug_struct = f.debug_struct("IMAGE_SECTION_HEADER_0");
 
-        // Safety: Reading union fields requires unsafe
         unsafe {
             debug_struct
                 .field(
@@ -178,6 +177,7 @@ impl Default for IMAGE_SECTION_HEADER_0 {
 }
 
 #[repr(C)]
+#[derive(Clone, Copy, Default)]
 pub struct IMAGE_IMPORT_DESCRIPTOR {
     pub Anonymous: IMAGE_IMPORT_DESCRIPTOR_0,
     pub TimeDateStamp: u32,
@@ -187,17 +187,36 @@ pub struct IMAGE_IMPORT_DESCRIPTOR {
 }
 
 #[repr(C)]
+#[derive(Clone, Copy)]
 pub union IMAGE_IMPORT_DESCRIPTOR_0 {
     pub Characteristics: u32,
     pub OriginalFirstThunk: u32,
 }
 
+impl Default for IMAGE_IMPORT_DESCRIPTOR_0 {
+    fn default() -> Self {
+        Self {
+            OriginalFirstThunk: 0,
+        }
+    }
+}
+
 #[repr(C)]
+#[derive(Clone, Copy)]
 pub struct IMAGE_THUNK_DATA64 {
     pub u1: IMAGE_THUNK_DATA64_0,
 }
 
+impl Default for IMAGE_THUNK_DATA64 {
+    fn default() -> Self {
+        IMAGE_THUNK_DATA64 {
+            u1: IMAGE_THUNK_DATA64_0 { AddressOfData: 0 },
+        }
+    }
+}
+
 #[repr(C)]
+#[derive(Clone, Copy)]
 pub union IMAGE_THUNK_DATA64_0 {
     pub ForwarderString: u64,
     pub Function: u64,
@@ -212,15 +231,46 @@ pub struct IMAGE_IMPORT_BY_NAME {
 }
 
 #[repr(C)]
+#[derive(Clone, Copy, Default)]
+/// NOTE: at the moment function names are restricted to 32 characters.
 pub struct IMAGE_IMPORT_BY_NAME_EXTENDED {
     pub Hint: u16,
-    pub Name: [i8; 64],
+    pub Name: [i8; 32],
+}
+
+impl IMAGE_IMPORT_BY_NAME_EXTENDED {
+    fn new(name: &str) -> Self {
+        let mut s = IMAGE_IMPORT_BY_NAME_EXTENDED::default();
+
+        // set each byte of the name field to the specified string, at max 32.
+        for (i, byte) in name.as_bytes().iter().enumerate().take(32) {
+            s.Name[i] = *byte as _;
+        }
+
+        s
+    }
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct DLL_NAME {
+    pub dll_name: [i8; 32],
+}
+
+impl DLL_NAME {
+    pub fn set_dll_name(&mut self, name: &str) {
+        // set each byte of the name field to the specified string, at max 32.
+        for (i, byte) in name.as_bytes().iter().enumerate().take(32) {
+            self.dll_name[i] = *byte as _;
+        }
+    }
 }
 
 #[repr(C)]
 /// This is a modified version of `THUNK_DATA` struct,
 /// I made this so it's easier to create imports next to each other in memory.
+#[derive(Clone, Copy, Default)]
 pub struct THUNK_EX {
-    thunk: IMAGE_THUNK_DATA64,
-    name: IMAGE_IMPORT_BY_NAME_EXTENDED,
+    pub thunk: IMAGE_THUNK_DATA64,
+    pub function_name: IMAGE_IMPORT_BY_NAME_EXTENDED,
 }
