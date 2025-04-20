@@ -126,7 +126,7 @@ impl Pe {
         Err(PeError::NotInSection)
     }
 
-    pub fn set_import_directory_rva(&mut self, rva: u32) {
+    pub fn set_import_directory_rva(&self, rva: u32) {
         let optional_header_ptr =
             unsafe { std::ptr::addr_of!((*self.get_nt_headers_ptr()).OptionalHeader) }
                 as *mut IMAGE_OPTIONAL_HEADER64;
@@ -243,7 +243,30 @@ impl Pe {
         Ok(String::from_utf8_lossy(slice).to_string())
     }
 
-    pub fn add_new_import_section(&mut self, name: Option<&str>, size: u32) -> Result<()> {
+    pub fn get_size_of_headers(&self) -> u32 {
+        // instea of getting the size of the DOS header, we start from the nt header, so that it
+        // includes the DOS stub B).
+        self.get_dos_header().e_lfanew as u32
+            + std::mem::size_of::<IMAGE_NT_HEADERS64>() as u32
+            + (self.get_nt_headers().FileHeader.NumberOfSections as u32
+                * std::mem::size_of::<IMAGE_SECTION_HEADER>() as u32)
+    }
+
+    pub fn get_size_of_initialized_data(&self) -> Result<u32> {
+        Ok(self
+            .get_section_headers()?
+            .iter()
+            // TODO: use the section permission enum.
+            .filter(|s| (s.Characteristics & 0x40) != 0)
+            .map(|s| s.SizeOfRawData)
+            .sum::<u32>())
+    }
+
+    pub fn add_new_import_section(
+        &mut self,
+        name: Option<&str>,
+        size: u32,
+    ) -> Result<IMAGE_SECTION_HEADER> {
         // create a new section header that we'll append to the table.
         let mut section = IMAGE_SECTION_HEADER::default();
 
@@ -267,12 +290,10 @@ impl Pe {
             (last_section.PointerToRawData + last_section.SizeOfRawData).align(file_alignment);
 
         // in the docs, it doesn't say that this needs to be aligned.
-        section.VirtualAddress =
-            last_section.VirtualAddress + unsafe { last_section.Misc.VirtualSize };
-
-        // section.VirtualAddress = (last_section.VirtualAddress
-        //     + unsafe { last_section.Misc.VirtualSize })
-        // .align(section_alignment);
+        // yet in practice, it does need to be aligned, so... thanks microsoft.
+        section.VirtualAddress = (last_section.VirtualAddress
+            + unsafe { last_section.Misc.VirtualSize })
+        .align(section_alignment);
 
         // make sure the size is properly aligned.
         section.SizeOfRawData = size.align(file_alignment);
@@ -299,7 +320,28 @@ impl Pe {
         self.bytes
             .resize(self.bytes.len() + section.SizeOfRawData as usize, 0);
 
-        Ok(())
+        unsafe {
+            // correct the size of headers.
+            (*(self.get_nt_headers_ptr() as *mut IMAGE_NT_HEADERS64))
+                .OptionalHeader
+                .SizeOfHeaders = self.get_size_of_headers();
+        }
+
+        unsafe {
+            // correct the size of image.
+            (*(self.get_nt_headers_ptr() as *mut IMAGE_NT_HEADERS64))
+                .OptionalHeader
+                .SizeOfImage = section.VirtualAddress + section.Misc.VirtualSize;
+        }
+
+        unsafe {
+            // correct the size of intialized data.
+            (*(self.get_nt_headers_ptr() as *mut IMAGE_NT_HEADERS64))
+                .OptionalHeader
+                .SizeOfInitializedData = self.get_size_of_initialized_data()?;
+        }
+
+        Ok(section)
     }
 
     /// Exports the `bytes` buffer containing the *potentially* modified PE file.

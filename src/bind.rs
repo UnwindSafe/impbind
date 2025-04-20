@@ -50,7 +50,9 @@ pub fn bind(args: Arguments) -> Result<(), BindError> {
         return list_imports(&pe);
     }
 
-    pe.add_new_import_section(Some(".idata"), 0x1000)?;
+    let section = pe.add_new_import_section(Some(".idata"), 0x1000)?;
+
+    // pe.set_import_directory_rva(section.VirtualAddress);
 
     pe.export(&format!(
         "{}.imp.exe",
