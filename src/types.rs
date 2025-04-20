@@ -1,6 +1,17 @@
 #![allow(non_camel_case_types)]
 #![allow(non_snake_case)]
 
+pub struct Import {
+    pub file: String,
+    pub functions: Vec<String>,
+}
+
+impl Import {
+    pub fn new(file: String, functions: Vec<String>) -> Self {
+        Self { file, functions }
+    }
+}
+
 #[repr(C, packed(2))]
 #[derive(Debug)]
 pub struct IMAGE_DOS_HEADER {
@@ -198,4 +209,18 @@ pub union IMAGE_THUNK_DATA64_0 {
 pub struct IMAGE_IMPORT_BY_NAME {
     pub Hint: u16,
     pub Name: [i8; 1],
+}
+
+#[repr(C)]
+pub struct IMAGE_IMPORT_BY_NAME_EXTENDED {
+    pub Hint: u16,
+    pub Name: [i8; 64],
+}
+
+#[repr(C)]
+/// This is a modified version of `THUNK_DATA` struct,
+/// I made this so it's easier to create imports next to each other in memory.
+pub struct THUNK_EX {
+    thunk: IMAGE_THUNK_DATA64,
+    name: IMAGE_IMPORT_BY_NAME_EXTENDED,
 }

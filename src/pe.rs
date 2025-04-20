@@ -6,7 +6,7 @@ use thiserror::Error;
 use crate::types::{
     IMAGE_DIRECTORY_ENTRY, IMAGE_DOS_HEADER, IMAGE_FILE_HEADER, IMAGE_IMPORT_BY_NAME,
     IMAGE_IMPORT_DESCRIPTOR, IMAGE_NT_HEADERS64, IMAGE_OPTIONAL_HEADER64, IMAGE_SECTION_HEADER,
-    IMAGE_THUNK_DATA64,
+    IMAGE_THUNK_DATA64, Import,
 };
 
 #[derive(Error, Debug)]
@@ -138,7 +138,7 @@ impl Pe {
     }
 
     /// This will parse the import directory for import descriptors, and return them.
-    pub fn get_import_descriptors(&self) -> Result<Vec<IMAGE_IMPORT_DESCRIPTOR>> {
+    pub fn get_import_descriptors(&self) -> Result<&mut [IMAGE_IMPORT_DESCRIPTOR]> {
         // get the import data directory.
         let import_directory =
             self.get_nt_headers().OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY::IMPORT];
@@ -148,29 +148,15 @@ impl Pe {
         }
 
         // get a pointer to the image import descriptor.
-        let mut pointer = self.get_pointer_from_section(import_directory.VirtualAddress)?
-            as *const IMAGE_IMPORT_DESCRIPTOR;
+        let pointer = self.get_pointer_from_section(import_directory.VirtualAddress)?
+            as *mut IMAGE_IMPORT_DESCRIPTOR;
 
-        let mut import_descriptors: Vec<_> = Vec::new();
-
-        loop {
-            // deref the current descriptor.
-            let descriptor = unsafe { pointer.read_unaligned() };
-
-            // if there is no name specified the descriptor is probably empty.
-            if descriptor.Name == 0 {
-                break;
-            }
-
-            import_descriptors.push(descriptor);
-
-            unsafe {
-                // advance the pointer to the next descriptor.
-                pointer = pointer.add(1);
-            }
-        }
-
-        Ok(import_descriptors)
+        Ok(unsafe {
+            std::slice::from_raw_parts_mut(
+                pointer,
+                import_directory.Size as usize / std::mem::size_of::<IMAGE_IMPORT_DESCRIPTOR>() - 1,
+            )
+        })
     }
 
     /// Given a descriptor, return a vector of all of its ILT 'Thunks'.
@@ -364,6 +350,11 @@ impl Pe {
         }
 
         Ok(())
+    }
+
+    /// This will append imports to the import descriptors.
+    pub fn add_new_imports(&mut self, imports: Vec<Import>) -> Result<()> {
+        unimplemented!()
     }
 
     /// Exports the `bytes` buffer containing the *potentially* modified PE file.
