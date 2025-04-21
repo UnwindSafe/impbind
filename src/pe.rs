@@ -384,70 +384,44 @@ impl Pe {
                 .ok_or(PeError::NoSection)?
         };
 
-        let mut descriptors = Vec::new();
-        let mut descriptor_names = Vec::new();
+        let section_ptr = self.get_pointer_from_section(section.VirtualAddress)?;
 
-        for import in imports.iter() {
-            // add new descriptor that we will fill out later.
-            let descriptor = IMAGE_IMPORT_DESCRIPTOR::default();
-            descriptors.push(descriptor);
+        // get a pointer to the section after the descriptors.
+        let mut dll_name_section_ptr = unsafe {
+            section_ptr.add(
+                (self.get_import_descriptors()?.len() + imports.len() + 1)
+                    * std::mem::size_of::<IMAGE_IMPORT_DESCRIPTOR>(),
+            ) as *mut DLL_NAME
+        };
 
-            // cooresponding name for the descriptor.
-            let mut descriptor_name = DLL_NAME::default();
-            descriptor_name.set_dll_name(&import.file);
-            descriptor_names.push(descriptor_name);
-        }
+        let mut thunk_ex_section_ptr =
+            unsafe { dll_name_section_ptr.add(imports.len()) as *mut THUNK_EX };
 
-        let mut pointer_to_descriptors_natural_end =
-            self.get_import_descriptors()?
-                .into_iter()
-                .last()
-                .ok_or(PeError::NoDescriptor)? as *mut IMAGE_IMPORT_DESCRIPTOR;
+        let ptr = self
+            .get_import_descriptors()?
+            .into_iter()
+            .last()
+            .ok_or(PeError::NoDescriptor)? as *mut IMAGE_IMPORT_DESCRIPTOR;
 
-        // pointer_to_descriptors_natural_end = unsafe { pointer_to_descriptors_natural_end.add(1) };
+        // a pointer to the start of our image descriptors.
+        let descriptors = unsafe { std::slice::from_raw_parts_mut(ptr.add(1), imports.len() + 1) };
 
-        for (_, d) in descriptors.iter().enumerate() {
-            pointer_to_descriptors_natural_end =
-                unsafe { pointer_to_descriptors_natural_end.add(1) };
+        unsafe {
+            for (i, descriptor) in descriptors.into_iter().enumerate() {
+                // set to default descriptor value, otherwise uninit.
+                *descriptor = IMAGE_IMPORT_DESCRIPTOR::default();
 
-            unsafe { *pointer_to_descriptors_natural_end = *d }
-        }
+                // set the name of the dll then place it after the descriptor entries.
+                let mut name = DLL_NAME::default();
+                name.set_dll_name(&imports[i].file);
 
-        let mut pointer_to_dll_names =
-            unsafe { pointer_to_descriptors_natural_end.add(1) as *mut DLL_NAME };
-
-        for name in descriptor_names.iter() {
-            unsafe { *pointer_to_dll_names = *name }
-
-            pointer_to_dll_names = unsafe { pointer_to_dll_names.add(1) };
-        }
-
-        let mut descriptor_ptr: *mut IMAGE_IMPORT_DESCRIPTOR = std::ptr::null_mut();
-
-        for descriptor in self.get_import_descriptors()?.into_iter() {
-            // if this is the case it must be our descriptor.
-            if descriptor.Name == 0 {
-                descriptor_ptr = descriptor as *mut IMAGE_IMPORT_DESCRIPTOR;
-                break;
+                // set the dll name then increment name section pointer for next iteration.
+                *dll_name_section_ptr = name;
+                dll_name_section_ptr = dll_name_section_ptr.add(1);
             }
         }
 
-        let mut name_rva = section.VirtualAddress
-            + ((self.get_import_directory_size_manual() as u32 + descriptors.len() as u32)
-                * std::mem::size_of::<IMAGE_IMPORT_DESCRIPTOR>() as u32);
-
-        for i in 0..descriptors.len() {
-            unsafe {
-                (*descriptor_ptr).Name = name_rva;
-            }
-            descriptor_ptr = unsafe { descriptor_ptr.add(1) };
-            name_rva += std::mem::size_of::<DLL_NAME>() as u32;
-        }
-
-        // this is what the RVA is after going through the descriptors.
-        // let current_rva = section.VirtualAddress as usize
-        //     + std::mem::size_of::<IMAGE_IMPORT_DESCRIPTOR>() * descriptors.len()
-        //     + std::mem::size_of::<IMAGE_IMPORT_DESCRIPTOR>() * self.get_import_descriptors()?.len();
+        // for descrip
 
         Ok(())
     }
