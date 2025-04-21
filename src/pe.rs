@@ -7,7 +7,7 @@ use thiserror::Error;
 use crate::types::{
     DLL_NAME, IMAGE_DIRECTORY_ENTRY, IMAGE_DOS_HEADER, IMAGE_FILE_HEADER, IMAGE_IMPORT_BY_NAME,
     IMAGE_IMPORT_BY_NAME_EXTENDED, IMAGE_IMPORT_DESCRIPTOR, IMAGE_NT_HEADERS64,
-    IMAGE_OPTIONAL_HEADER64, IMAGE_SECTION_HEADER, IMAGE_THUNK_DATA64, Import, THUNK_EX,
+    IMAGE_OPTIONAL_HEADER64, IMAGE_SECTION_HEADER, IMAGE_THUNK_DATA64, Import,
 };
 
 #[derive(Error, Debug)]
@@ -24,20 +24,30 @@ pub enum PeError {
     NoDescriptor,
 }
 
-trait Align {
+trait Align<T> {
     /// Aligns a value to a specified boundary.
     ///
     /// This function rounds up a value to the next multiple of the specified alignment.
-    fn align(&self, alignment: u32) -> u32;
+    fn align(&self, alignment: T) -> T;
 }
 
-impl Align for u32 {
-    fn align(&self, alignment: u32) -> u32 {
-        if self % alignment == 0 {
+// Generic implementation for any type that supports the required operations
+impl<T> Align<T> for T
+where
+    T: Copy
+        + std::ops::Rem<Output = T>
+        + std::ops::Div<Output = T>
+        + std::ops::Add<Output = T>
+        + std::ops::Mul<Output = T>
+        + PartialEq<T>
+        + From<u8>,
+{
+    fn align(&self, alignment: T) -> T {
+        if *self % alignment == T::from(0) {
             return *self;
         }
 
-        (self / alignment + 1) * alignment
+        (*self / alignment + T::from(1)) * alignment
     }
 }
 
@@ -421,8 +431,24 @@ impl Pe {
             ) as *mut DLL_NAME
         };
 
-        let mut thunk_ex_section_ptr =
-            unsafe { dll_name_section_ptr.add(imports.len()) as *mut THUNK_EX };
+        let thunk_section_ptr = unsafe { dll_name_section_ptr.add(imports.len()) as u64 };
+
+        // NOTE: yes ik this is cursed, but it's easier to shadow this var, than to refactor a bit.
+        // it's very annoying, but I need to align this so that I can recast it in the future.
+        let mut thunk_section_ptr = thunk_section_ptr
+            .align(std::mem::size_of::<IMAGE_THUNK_DATA64>() as u64)
+            as *mut IMAGE_THUNK_DATA64;
+
+        // get the total functions from every dll specified, plus null thunk.
+        let total_functions = imports.iter().map(|i| i.functions.len() + 1).sum();
+
+        let mut current_function_name = 0;
+        let mut function_names = unsafe {
+            std::slice::from_raw_parts_mut(
+                thunk_section_ptr.add(total_functions) as *mut IMAGE_IMPORT_BY_NAME_EXTENDED,
+                total_functions,
+            )
+        };
 
         let ptr = self
             .get_import_descriptors()?
@@ -450,13 +476,8 @@ impl Pe {
 
                 dll_name_section_ptr = dll_name_section_ptr.add(1);
 
-                println!(
-                    "test {:?} {}",
-                    thunk_ex_section_ptr,
-                    std::mem::size_of::<THUNK_EX>()
-                );
                 let thunks = std::slice::from_raw_parts_mut(
-                    thunk_ex_section_ptr,
+                    thunk_section_ptr,
                     imports[i].functions.len() + 1,
                 );
 
@@ -464,27 +485,39 @@ impl Pe {
                 let thunks_len = thunks.len();
 
                 for (n, thunk) in thunks.into_iter().enumerate() {
-                    *thunk = THUNK_EX::default();
+                    *thunk = IMAGE_THUNK_DATA64::default();
+
+                    println!("hello");
 
                     // if it's the final thunk, then break after setting it to an empty struct.
                     if n == thunks_len - 1 {
                         break;
                     }
 
-                    // set both thunks to this thunk.
-                    descriptor.FirstThunk = self.get_rva_from_pointer(thunk as *const _ as u64)?;
-                    descriptor.Anonymous.OriginalFirstThunk =
-                        self.get_rva_from_pointer(thunk as *const _ as u64)?;
+                    // this will be the thunks 'address-of-data', aka function from import.
+                    function_names[current_function_name] =
+                        IMAGE_IMPORT_BY_NAME_EXTENDED::default();
+
+                    function_names[current_function_name].set_name(&imports[i].functions[n]);
 
                     // set the name of the function to the address of the `function_name` member.
-                    thunk.thunk.u1.AddressOfData =
-                        self.get_rva_from_pointer(addr_of!(thunk.function_name) as u64)? as u64;
+                    thunk.u1.AddressOfData = self.get_rva_from_pointer(
+                        &mut function_names[current_function_name]
+                            as *mut IMAGE_IMPORT_BY_NAME_EXTENDED as u64,
+                    )? as u64;
 
-                    // set the name of the function to what the user specified.
-                    thunk.function_name.set_name(&imports[i].functions[n]);
+                    current_function_name += 1;
                 }
 
-                thunk_ex_section_ptr = thunk_ex_section_ptr.add(thunks_len);
+                let thunk_rva =
+                    self.get_rva_from_pointer(thunks.first().unwrap() as *const _ as u64)?;
+
+                // set the ILT thunk to this thunk.
+                descriptor.Anonymous.OriginalFirstThunk = thunk_rva;
+
+                thunk_section_ptr = thunk_section_ptr.add(thunks_len);
+
+                println!("==============");
             }
         }
 

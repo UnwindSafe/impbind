@@ -239,6 +239,19 @@ pub struct IMAGE_IMPORT_BY_NAME_EXTENDED {
 }
 
 impl IMAGE_IMPORT_BY_NAME_EXTENDED {
+    pub fn get_name(&self) -> String {
+        // this could be really stupid.
+        String::from_utf8_lossy(
+            self.Name
+                .to_vec()
+                .iter()
+                .map(|b| *b as u8)
+                .collect::<Vec<_>>()
+                .as_slice(),
+        )
+        .to_string()
+    }
+
     pub fn set_name(&mut self, name: &str) {
         // set each byte of the name field to the specified string, at max 32.
         for (i, byte) in name.as_bytes().iter().enumerate().take(32) {
@@ -262,11 +275,11 @@ impl DLL_NAME {
     }
 }
 
-#[repr(C)]
-/// This is a modified version of `THUNK_DATA` struct,
-/// I made this so it's easier to create imports next to each other in memory.
-#[derive(Clone, Copy, Default)]
-pub struct THUNK_EX {
-    pub thunk: IMAGE_THUNK_DATA64,
-    pub function_name: IMAGE_IMPORT_BY_NAME_EXTENDED,
-}
+// #[repr(C)]
+// /// This is a modified version of `THUNK_DATA` struct,
+// /// I made this so it's easier to create imports next to each other in memory.
+// #[derive(Clone, Copy, Default)]
+// pub struct THUNK_EX {
+//     pub thunk: IMAGE_THUNK_DATA64,
+//     pub function_name: IMAGE_IMPORT_BY_NAME_EXTENDED,
+// }
