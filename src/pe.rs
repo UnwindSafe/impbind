@@ -404,7 +404,7 @@ impl Pe {
     ///
     /// This will only work one time per import directory.
     /// This also assumes the start of the section is where directory is.
-    pub fn add_new_imports(
+    pub fn add_imports_for_section(
         &mut self,
         section_name: Option<&str>,
         imports: Vec<Import>,
@@ -442,13 +442,15 @@ impl Pe {
         // get the total functions from every dll specified, plus null thunk.
         let total_functions = imports.iter().map(|i| i.functions.len() + 1).sum();
 
-        let mut current_function_name = 0;
-        let mut function_names = unsafe {
+        let function_names = unsafe {
             std::slice::from_raw_parts_mut(
                 thunk_section_ptr.add(total_functions) as *mut IMAGE_IMPORT_BY_NAME_EXTENDED,
                 total_functions,
             )
         };
+
+        // used to keep track of which `function_names` element we're on.
+        let mut current_function_name = 0;
 
         let ptr = self
             .get_import_descriptors()?
@@ -476,6 +478,7 @@ impl Pe {
 
                 dll_name_section_ptr = dll_name_section_ptr.add(1);
 
+                // for our current descriptor, create a slice of thunks for it.
                 let thunks = std::slice::from_raw_parts_mut(
                     thunk_section_ptr,
                     imports[i].functions.len() + 1,
@@ -486,8 +489,6 @@ impl Pe {
 
                 for (n, thunk) in thunks.into_iter().enumerate() {
                     *thunk = IMAGE_THUNK_DATA64::default();
-
-                    println!("hello");
 
                     // if it's the final thunk, then break after setting it to an empty struct.
                     if n == thunks_len - 1 {
@@ -516,12 +517,8 @@ impl Pe {
                 descriptor.Anonymous.OriginalFirstThunk = thunk_rva;
 
                 thunk_section_ptr = thunk_section_ptr.add(thunks_len);
-
-                println!("==============");
             }
         }
-
-        // for descrip
 
         Ok(())
     }
