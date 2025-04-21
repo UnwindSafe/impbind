@@ -47,27 +47,25 @@ pub fn bind(args: Arguments) -> Result<(), BindError> {
     pe.verify()?;
 
     // specified through the command line.
-    if args.list_imports {
+    if args.list {
         return list_imports(&pe);
     }
 
-    let section = pe.add_new_import_section(Some(".idata"), 0x1000)?;
+    let section = pe.add_new_import_section(Some(".idata"), 0x100000)?;
 
     pe.copy_imports_to_rva(section.VirtualAddress)?;
 
     pe.set_import_directory_rva(section.VirtualAddress);
 
-    let import = Import::new(
-        "house.dll".to_string(),
-        vec!["Window".to_string(), "Door".to_string(), "Roof".to_string()],
-    );
+    let mut x = Vec::new();
 
-    let import_2 = Import::new(
-        "hi.dll".to_string(),
-        vec!["same".to_string(), "thing".to_string(), "here".to_string()],
-    );
+    for _ in 0..2000 {
+        x.push("f̶̨̢̢͙̗̦̬̹̼̝͔͓̹͕̙͕̗̟̜̭͇̘̐͒͐͌̿̿̌̀̈́͗̊̈́̅̉̽̔̋̏̈͌͋͗̍̚̕s̷̨̧̨̛̛̥͇͓͓͓̗̜̭̘̮̲̥̝͚̣̝͉͓͕͙͓͕̝̼̍̇͂̑̅̋̈́̏̓͛̏̄̃̉̄͂̋̏̍̈́̊̊̈́̚̚̕̕͝͠͠͝ͅͅͅf̶̧̢̡̛̩̗̮͇̜̣̜̺̻̥̫͔̫̪͈̙̤̤̺̝̹̗͈͈̳̜̩̺̹͔̅̍́̔͂̒̑͛̅͗͒̄͌͂̿́̈́̍͌̽̊̓͋̌͑̆̾̎͒̓̌͋̃̀̒̋̓͘̕͘͘̚̚͜͜͝͠ͅd̸̢̛̛̦̱̰̫̭͇̣̙͚̙͕̓̈́͗͊̀̾̔̂̓̿̓̈́̀̍̕̕f̸̡̛̛̭͖̖͓̙̩̜̹̌̋̽̉͐̆̿́̕f̶̨̧̡̨̡̧͖̫̮̯̲̣͇̩͕̲̱̖̱͓̠̜̫͍͎̯̜̤̼͕̫̰̯̥̮̮̣̖̫̦͖̣͓͛̊̑͊̒̄́̀͑̈́̑̈̾͗̀̓̀̒̃̎̚͜v̶̗̤̦̰̗͖̤͔̘̬̞̥̝̗͓̪̮̜͚̠̹̙̘͈̉͂̈́̈̿͑̎̒̅̀͘͜".to_string())
+    }
 
-    pe.add_new_imports(None, vec![import, import_2])?;
+    let import_2 = Import::new("ntdll.dll".to_string(), x);
+
+    pe.add_imports_for_section(None, vec![import_2])?;
 
     pe.export(&format!(
         "{}.imp.exe",
