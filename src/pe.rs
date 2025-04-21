@@ -14,7 +14,7 @@ use crate::types::{
 pub enum PeError {
     #[error(transparent)]
     IOError(#[from] std::io::Error),
-    #[error("Invalid PE file.")]
+    #[error("Invalid 64bit PE file.")]
     Invalid,
     #[error("RVA is not inside of a section.")]
     NotInSection,

@@ -28,12 +28,11 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     pretty_env_logger::init();
 
-    trace!("test");
     // parse the command line arguments.
     let args = Arguments::parse();
 
     if let Err(e) = bind::bind(args) {
-        println!("ERROR: {e:?}");
+        error!("ERROR: {e:?}");
         process::exit(-1);
     }
 

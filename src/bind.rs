@@ -1,4 +1,5 @@
 use comfy_table::{Table, modifiers::UTF8_ROUND_CORNERS, presets::UTF8_FULL};
+use log::info;
 use thiserror::Error;
 
 use crate::{
@@ -43,15 +44,21 @@ pub fn bind(args: Arguments) -> Result<(), BindError> {
     // create the PE object from file.
     let mut pe = Pe::from(args.file.clone())?;
 
+    info!("verifying file.");
+
     // ensure that the pe file is valid.
     pe.verify()?;
 
     // specified through the command line.
     if args.list {
+        info!(
+            "showing the list of '{}' imports.",
+            args.file.to_string_lossy()
+        );
         return list_imports(&pe);
     }
 
-    let section = pe.add_new_import_section(Some(".idata"), 0x100000)?;
+    let section = pe.add_new_import_section(Some(".idata"), 0x100)?;
 
     pe.copy_imports_to_rva(section.VirtualAddress)?;
 
