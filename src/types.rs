@@ -239,15 +239,11 @@ pub struct IMAGE_IMPORT_BY_NAME_EXTENDED {
 }
 
 impl IMAGE_IMPORT_BY_NAME_EXTENDED {
-    fn new(name: &str) -> Self {
-        let mut s = IMAGE_IMPORT_BY_NAME_EXTENDED::default();
-
+    pub fn set_name(&mut self, name: &str) {
         // set each byte of the name field to the specified string, at max 32.
         for (i, byte) in name.as_bytes().iter().enumerate().take(32) {
-            s.Name[i] = *byte as _;
+            self.Name[i] = *byte as _;
         }
-
-        s
     }
 }
 

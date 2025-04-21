@@ -62,7 +62,12 @@ pub fn bind(args: Arguments) -> Result<(), BindError> {
         vec!["Window".to_string(), "Door".to_string(), "Roof".to_string()],
     );
 
-    pe.add_new_imports(None, vec![import])?;
+    let import_2 = Import::new(
+        "hi.dll".to_string(),
+        vec!["same".to_string(), "thing".to_string(), "here".to_string()],
+    );
+
+    pe.add_new_imports(None, vec![import, import_2])?;
 
     pe.export(&format!(
         "{}.imp.exe",

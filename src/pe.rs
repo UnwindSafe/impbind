@@ -1,12 +1,13 @@
 use std::io::prelude::*;
+use std::ptr::addr_of;
 use std::{isize, path::PathBuf};
 
 use thiserror::Error;
 
 use crate::types::{
     DLL_NAME, IMAGE_DIRECTORY_ENTRY, IMAGE_DOS_HEADER, IMAGE_FILE_HEADER, IMAGE_IMPORT_BY_NAME,
-    IMAGE_IMPORT_DESCRIPTOR, IMAGE_NT_HEADERS64, IMAGE_OPTIONAL_HEADER64, IMAGE_SECTION_HEADER,
-    IMAGE_THUNK_DATA64, Import, THUNK_EX,
+    IMAGE_IMPORT_BY_NAME_EXTENDED, IMAGE_IMPORT_DESCRIPTOR, IMAGE_NT_HEADERS64,
+    IMAGE_OPTIONAL_HEADER64, IMAGE_SECTION_HEADER, IMAGE_THUNK_DATA64, Import, THUNK_EX,
 };
 
 #[derive(Error, Debug)]
@@ -444,11 +445,46 @@ impl Pe {
                 // set the dll name then increment name section pointer for next iteration.
                 *dll_name_section_ptr = name;
 
+                // set the descriptor name to the rva of the dll name struct.
                 descriptor.Name = self.get_rva_from_pointer(dll_name_section_ptr as u64)?;
 
-                descriptor.TimeDateStamp = 0x1337;
-
                 dll_name_section_ptr = dll_name_section_ptr.add(1);
+
+                println!(
+                    "test {:?} {}",
+                    thunk_ex_section_ptr,
+                    std::mem::size_of::<THUNK_EX>()
+                );
+                let thunks = std::slice::from_raw_parts_mut(
+                    thunk_ex_section_ptr,
+                    imports[i].functions.len() + 1,
+                );
+
+                // get the length of the thunks.
+                let thunks_len = thunks.len();
+
+                for (n, thunk) in thunks.into_iter().enumerate() {
+                    *thunk = THUNK_EX::default();
+
+                    // if it's the final thunk, then break after setting it to an empty struct.
+                    if n == thunks_len - 1 {
+                        break;
+                    }
+
+                    // set both thunks to this thunk.
+                    descriptor.FirstThunk = self.get_rva_from_pointer(thunk as *const _ as u64)?;
+                    descriptor.Anonymous.OriginalFirstThunk =
+                        self.get_rva_from_pointer(thunk as *const _ as u64)?;
+
+                    // set the name of the function to the address of the `function_name` member.
+                    thunk.thunk.u1.AddressOfData =
+                        self.get_rva_from_pointer(addr_of!(thunk.function_name) as u64)? as u64;
+
+                    // set the name of the function to what the user specified.
+                    thunk.function_name.set_name(&imports[i].functions[n]);
+                }
+
+                thunk_ex_section_ptr = thunk_ex_section_ptr.add(thunks_len);
             }
         }
 
