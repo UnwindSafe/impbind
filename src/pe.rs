@@ -128,6 +128,32 @@ impl Pe {
         Err(PeError::NotInSection)
     }
 
+    /// Gets an RVA from a pointer to the raw data.
+    pub fn get_rva_from_pointer(&self, ptr: u64) -> Result<u32> {
+        // get the offset into the file.
+        let raw_offset = (ptr - self.bytes.as_ptr() as u64) as u32;
+
+        // make sure the offset is within boundaries and not some random pointer.
+        if raw_offset >= self.bytes.len() as u32 {
+            return Err(PeError::NotInSection);
+        }
+
+        for section in self.get_section_headers()? {
+            let start_address = section.PointerToRawData;
+            let end_address = section.PointerToRawData + section.SizeOfRawData;
+
+            // if the offset is in the range of the section.
+            if raw_offset >= start_address && raw_offset < end_address {
+                // get offset of the target from the section.
+                let delta = raw_offset - section.PointerToRawData;
+
+                return Ok(section.VirtualAddress + delta);
+            }
+        }
+
+        Err(PeError::NotInSection)
+    }
+
     pub fn set_import_directory_rva(&self, rva: u32) {
         let optional_header_ptr =
             unsafe { std::ptr::addr_of!((*self.get_nt_headers_ptr()).OptionalHeader) }
@@ -404,7 +430,7 @@ impl Pe {
             .ok_or(PeError::NoDescriptor)? as *mut IMAGE_IMPORT_DESCRIPTOR;
 
         // a pointer to the start of our image descriptors.
-        let descriptors = unsafe { std::slice::from_raw_parts_mut(ptr.add(1), imports.len() + 1) };
+        let descriptors = unsafe { std::slice::from_raw_parts_mut(ptr.add(1), imports.len()) };
 
         unsafe {
             for (i, descriptor) in descriptors.into_iter().enumerate() {
@@ -417,6 +443,11 @@ impl Pe {
 
                 // set the dll name then increment name section pointer for next iteration.
                 *dll_name_section_ptr = name;
+
+                descriptor.Name = self.get_rva_from_pointer(dll_name_section_ptr as u64)?;
+
+                descriptor.TimeDateStamp = 0x1337;
+
                 dll_name_section_ptr = dll_name_section_ptr.add(1);
             }
         }
