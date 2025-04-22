@@ -22,7 +22,7 @@ pub struct Arguments {
     section_name: Option<String>,
 
     /// The list of imports you want to add to target file.
-    #[arg(short, long, value_delimiter = ',', required = true)]
+    #[arg(short, long, value_delimiter = ',')]
     pub imports: Vec<String>,
 }
 
