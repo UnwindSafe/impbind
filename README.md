@@ -2,7 +2,7 @@
 Adds fake imports to an executable.
 
 ## Motivation
-The motivation for this project is twofold. Firstly, is to provide a new import hash for a binary. Some import hashes are a huge red flag for antiviruses.
+The motivation for this project is twofold. Firstly, is to provide a new import hash for a binary. Some import hashes are a huge red flag for antiviruses (an import hash is just a hash of all the imports in an executable file).
 
 Previous Imphash: `6d28f0f849482928a2a297579e647cb5`
 
