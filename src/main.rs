@@ -18,7 +18,7 @@ pub struct Arguments {
     list: bool,
 
     /// The list of imports you want to add to target file.
-    #[arg(short, long, value_delimiter = ',')]
+    #[arg(short, long, value_delimiter = ',', required = true)]
     pub imports: Vec<String>,
 }
 

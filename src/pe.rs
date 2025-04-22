@@ -523,6 +523,36 @@ impl Pe {
         Ok(())
     }
 
+    /// Get the size of current and new import descriptors.
+    /// NOTE: this assumes that this is called in the context of newly added import sections.
+    pub fn get_custom_import_size(&self, imports: Vec<Import>) -> Result<usize> {
+        let old_import_descriptor_size =
+            self.get_import_descriptors()?.len() * std::mem::size_of::<IMAGE_IMPORT_DESCRIPTOR>();
+
+        let new_import_descriptor_size =
+            imports.len() * std::mem::size_of::<IMAGE_IMPORT_DESCRIPTOR>();
+
+        // size of the section after import descriptors.
+        let dll_names_size = imports.len() * std::mem::size_of::<DLL_NAME>();
+
+        // the total amount of thunks that will get created.
+        let total_functions: usize = imports.iter().map(|i| i.functions.len() + 1).sum();
+
+        let thunks_size = total_functions * std::mem::size_of::<IMAGE_THUNK_DATA64>();
+
+        // one function name for every thunk.
+        let function_names_size =
+            total_functions * std::mem::size_of::<IMAGE_IMPORT_BY_NAME_EXTENDED>();
+
+        Ok(old_import_descriptor_size
+            + new_import_descriptor_size
+            + dll_names_size
+            + total_functions
+            + thunks_size
+            + function_names_size
+            + 16)
+    }
+
     /// Exports the `bytes` buffer containing the *potentially* modified PE file.
     pub fn export(&self, name: &str) -> Result<()> {
         // create the new file.

@@ -1,6 +1,7 @@
 #![allow(non_camel_case_types)]
 #![allow(non_snake_case)]
 
+#[derive(Clone, Debug)]
 pub struct Import {
     pub file: String,
     pub functions: Vec<String>,
