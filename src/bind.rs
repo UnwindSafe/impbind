@@ -1,4 +1,4 @@
-use std::{collections::HashMap, task::Wake};
+use std::collections::HashMap;
 
 use comfy_table::{Table, modifiers::UTF8_ROUND_CORNERS, presets::UTF8_FULL};
 use log::info;

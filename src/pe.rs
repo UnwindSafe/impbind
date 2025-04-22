@@ -1,5 +1,4 @@
 use std::io::prelude::*;
-use std::ptr::addr_of;
 use std::{isize, path::PathBuf};
 
 use thiserror::Error;
@@ -174,15 +173,6 @@ impl Pe {
             (*optional_header_ptr).DataDirectory[IMAGE_DIRECTORY_ENTRY::IMPORT].VirtualAddress =
                 rva;
         }
-    }
-
-    /// Instead of getting the length from the slice, this uses the size member.
-    fn get_import_directory_size_manual(&self) -> usize {
-        // get the import data directory.
-        let import_directory =
-            self.get_nt_headers().OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY::IMPORT];
-
-        import_directory.Size as usize / std::mem::size_of::<IMAGE_IMPORT_DESCRIPTOR>() - 1
     }
 
     /// This will parse the import directory for import descriptors, and return them.
