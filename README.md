@@ -54,3 +54,7 @@ Example:
 │                                   ┆ FreeLibrary                                │
 │                                   ┆ QueryPerformanceCounter                    │
 ```
+## Output
+Imports added to the target executable file.
+
+![picture showing new imports](images/output.png)
