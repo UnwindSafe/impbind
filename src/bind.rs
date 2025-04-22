@@ -46,7 +46,7 @@ fn list_imports(pe: &Pe) -> Result<(), BindError> {
 
 /// This will turn an import string into an `Import`.
 ///
-/// e.g. "kernel32.exe!ReadProcessMemory" -> Import
+/// e.g. "kernel32.dll!ReadProcessMemory" -> Import
 fn parse_user_imports(imports: &Vec<String>) -> Result<Vec<Import>, BindError> {
     // this will map a dll name to function names.
     let mut map: HashMap<&str, Vec<String>> = HashMap::new();
@@ -89,26 +89,32 @@ pub fn bind(args: Arguments) -> Result<(), BindError> {
         return list_imports(&pe);
     }
 
-    parse_user_imports(&args.imports);
+    info!("parsing user provided imports.");
+    let imports = parse_user_imports(&args.imports)?;
 
-    let mut x = Vec::new();
+    let section_name = args.section_name.unwrap_or(String::from(".idata"));
 
-    for _ in 0..2 {
-        x.push("LOOOOOOOOOOOL".to_string())
-    }
+    info!("creating new section '{section_name}'.");
+    let section =
+        // add a new section to the executable.
+        pe.add_new_import_section(Some(&section_name), pe.get_custom_import_size(&imports)? as _)?;
 
-    let import_2 = Import::new("ntdll.dll".to_string(), x);
-
-    let size = pe.get_custom_import_size(vec![import_2.clone()])?;
-
-    let section = pe.add_new_import_section(Some(".idata"), size as _)?;
-
+    info!(
+        "copying import directory to 0x{:X}.",
+        section.VirtualAddress
+    );
+    // copy the contents of the import directory to our newly created section.
     pe.copy_imports_to_rva(section.VirtualAddress)?;
 
+    info!("setting import directory virtual address to new section.",);
+    // make it so that our newly created section is now canonically the import directory.
     pe.set_import_directory_rva(section.VirtualAddress);
 
-    pe.add_imports_for_section(None, vec![import_2])?;
+    info!("adding {} imports to import directory.", imports.len());
+    // add the user specified imports to our new import directory.
+    pe.add_imports_for_section(None, imports)?;
 
+    info!("exporting PE file.");
     pe.export(&format!(
         "{}.imp.exe",
         args.file.file_stem().unwrap().to_string_lossy()

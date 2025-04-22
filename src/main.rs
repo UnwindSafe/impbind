@@ -3,7 +3,7 @@ pub mod pe;
 pub mod types;
 
 use clap::Parser;
-use log::{LevelFilter, debug, error, info, trace, warn};
+use log::error;
 use std::{error::Error, path::PathBuf, process};
 
 /// impbind - PE import spoofer tool.
@@ -16,6 +16,10 @@ pub struct Arguments {
     /// Show the current imports for target file.
     #[arg(short, long)]
     list: bool,
+
+    /// The name of the custom section added for imports. default = .idata
+    #[arg(short, long)]
+    section_name: Option<String>,
 
     /// The list of imports you want to add to target file.
     #[arg(short, long, value_delimiter = ',', required = true)]

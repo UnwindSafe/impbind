@@ -525,7 +525,7 @@ impl Pe {
 
     /// Get the size of current and new import descriptors.
     /// NOTE: this assumes that this is called in the context of newly added import sections.
-    pub fn get_custom_import_size(&self, imports: Vec<Import>) -> Result<usize> {
+    pub fn get_custom_import_size(&self, imports: &Vec<Import>) -> Result<usize> {
         let old_import_descriptor_size =
             self.get_import_descriptors()?.len() * std::mem::size_of::<IMAGE_IMPORT_DESCRIPTOR>();
 
